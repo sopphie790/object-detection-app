@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer
+from streamlit_webrtc import webrtc_streamer, RTCConfiguration
 from ultralytics import YOLO
 import av
 import cv2
@@ -9,6 +9,7 @@ import cv2
 # =========================
 @st.cache_resource
 def load_model():
+    # Gagamit tayo ng 'yolov8n.pt' (Nano) para mabilis at hindi ma-timeout ang server
     return YOLO("yolov8n.pt")
 
 model = load_model()
@@ -16,8 +17,18 @@ model = load_model()
 # =========================
 # UI
 # =========================
+st.set_page_config(page_title="YOLOv8 Live Tracker", layout="wide")
 st.title("🎥 Live Object Detection & Tracking")
 st.write("Real-time AI object detection using YOLOv8 and webcam.")
+
+# Mas maraming STUN servers para iwas 'Connection Timeout'
+RTC_CONFIGURATION = RTCConfiguration(
+    {"iceServers": [
+        {"urls": ["stun:stun.l.google.com:19302"]},
+        {"urls": ["stun:stun1.l.google.com:19302"]},
+        {"urls": ["stun:stun2.l.google.com:19302"]}
+    ]}
+)
 
 # =========================
 # Video Processing Function
@@ -26,36 +37,38 @@ def video_frame_callback(frame):
     img = frame.to_ndarray(format="bgr24")
 
     # Run YOLOv8 tracking
+    # conf=0.4 para hindi masyadong 'noisy' ang detection
     results = model.track(
         img,
         persist=True,
-        conf=0.25,
+        conf=0.4,
         verbose=False
     )
 
+    # Kunin ang annotated frame mula sa YOLO
     annotated_frame = results[0].plot()
 
     # =========================
     # 🔢 OBJECT COUNTING
     # =========================
     counts = {}
-
     if results[0].boxes is not None:
         for box in results[0].boxes:
-            cls = int(box.cls[0])
-            name = model.names[cls]
-            counts[name] = counts.get(name, 0) + 1
+            if box.cls is not None:
+                cls = int(box.cls[0])
+                name = model.names[cls]
+                counts[name] = counts.get(name, 0) + 1
 
-    # Display counts on screen
+    # Display counts on screen gamit ang OpenCV
     y_offset = 30
     for obj, count in counts.items():
-        text = f"{obj}: {count}"
+        text = f"{obj.upper()}: {count}"
         cv2.putText(
             annotated_frame,
             text,
             (10, y_offset),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
+            0.7,
             (0, 255, 0),
             2
         )
@@ -68,18 +81,12 @@ def video_frame_callback(frame):
         cv2.putText(
             annotated_frame,
             "ALERT: Person Detected!",
-            (10, y_offset + 20),
+            (10, y_offset + 10),
             cv2.FONT_HERSHEY_SIMPLEX,
-            1,
+            0.8,
             (0, 0, 255),
-            3
+            2
         )
-
-    # =========================
-    # 💾 SAVE FRAME (optional auto-save)
-    # =========================
-    if counts:
-        cv2.imwrite("detected_frame.jpg", annotated_frame)
 
     return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
@@ -87,11 +94,12 @@ def video_frame_callback(frame):
 # Start Webcam Stream
 # =========================
 webrtc_streamer(
-    key="object-detection",
+    key="yolo-detection",
+    mode=None, # Default mode
     video_frame_callback=video_frame_callback,
-    async_processing=True,
-    rtc_configuration={
-        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-    },
+    rtc_configuration=RTC_CONFIGURATION,
     media_stream_constraints={"video": True, "audio": False},
+    async_processing=True,
 )
+
+st.info("💡 Tip: Siguraduhing 'Allowed' ang Camera sa iyong browser. Kung hindi gumagana, subukan sa Mobile Data.")
