@@ -90,16 +90,16 @@ def video_frame_callback(frame):
 
     return av.VideoFrame.from_ndarray(annotated_frame, format="bgr24")
 
-# =========================
-# Start Webcam Stream
-# =========================
-webrtc_streamer(
-    key="yolo-detection",
-    mode=None, # Default mode
-    video_frame_callback=video_frame_callback,
-    rtc_configuration=RTC_CONFIGURATION,
-    media_stream_constraints={"video": True, "audio": False},
-    async_processing=True,
-)
+    # =========================
+    # Start Webcam Stream
+    # =========================
+    webrtc_streamer(
+        key="yolo-detection",
+        # Inalis natin ang 'mode=None' para hindi mag-AttributeError
+        video_frame_callback=video_frame_callback,
+        rtc_configuration=RTC_CONFIGURATION,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
 
 st.info("💡 Tip: Siguraduhing 'Allowed' ang Camera sa iyong browser. Kung hindi gumagana, subukan sa Mobile Data.")
